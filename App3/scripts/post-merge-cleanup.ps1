@@ -5,6 +5,10 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+if (Get-Variable -Name PSNativeCommandUseErrorActionPreference -ErrorAction SilentlyContinue) {
+  $PSNativeCommandUseErrorActionPreference = $false
+}
+
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $featureBranch = 'feature/codebase-audit-fixes'
 $featureRemoteRef = "origin/$featureBranch"
@@ -15,11 +19,15 @@ Set-Location $repoRoot
 Write-Output '[post-merge] fetching origin'
 git fetch origin
 
-try {
-  $featureHead = (git rev-parse $featureRemoteRef).Trim()
-} catch {
-  Write-Output "[post-merge] missing remote branch ref: $featureRemoteRef"
-  exit 1
+$featureHead = (cmd /c "git rev-parse $featureRemoteRef 2>nul").Trim()
+if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($featureHead)) {
+  Write-Output "[post-merge] missing remote branch ref: $featureRemoteRef; using local branch head instead"
+  $featureHead = (cmd /c "git rev-parse $featureBranch 2>nul").Trim()
+  if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($featureHead)) {
+    Write-Output "[post-merge] local branch not found either: $featureBranch"
+    Write-Output '[post-merge] cleanup already complete; nothing to do.'
+    exit 0
+  }
 }
 
 # merge-base --is-ancestor returns 0 when the feature head is included in origin/main
@@ -37,6 +45,19 @@ if (Test-Path $tempWorktreePath) {
 Write-Output '[post-merge] creating temporary main worktree for safe verification'
 git worktree add --detach $tempWorktreePath origin/main
 
+$safeDirectoryAdded = $false
+$safeDirectoryPath = ($tempWorktreePath -replace '\\', '/')
+try {
+  $existingSafeDirectories = git config --global --get-all safe.directory 2>$null
+  if (-not ($existingSafeDirectories -contains $safeDirectoryPath)) {
+    Write-Output '[post-merge] registering temporary worktree as git safe.directory'
+    git config --global --add safe.directory $safeDirectoryPath
+    $safeDirectoryAdded = $true
+  }
+} catch {
+  Write-Output '[post-merge] warning: unable to configure git safe.directory automatically'
+}
+
 try {
   Write-Output '[post-merge] fast-forwarding main inside temporary worktree'
   git -C $tempWorktreePath pull --ff-only origin main
@@ -51,6 +72,15 @@ try {
   }
 }
 finally {
+  if ($safeDirectoryAdded) {
+    try {
+      Write-Output '[post-merge] removing temporary safe.directory entry'
+      git config --global --unset-all safe.directory $safeDirectoryPath
+    } catch {
+      Write-Output '[post-merge] warning: failed to remove temporary safe.directory entry'
+    }
+  }
+
   if (-not $KeepWorktree -and (Test-Path $tempWorktreePath)) {
     Write-Output '[post-merge] removing temporary worktree'
     git worktree remove $tempWorktreePath --force
@@ -72,7 +102,12 @@ if ($currentBranch -eq $featureBranch) {
   }
 } else {
   Write-Output '[post-merge] deleting local feature branch (not currently checked out)'
-  git branch -d $featureBranch
+  & git show-ref --verify --quiet "refs/heads/$featureBranch"
+  if ($LASTEXITCODE -eq 0) {
+    git branch -d $featureBranch
+  } else {
+    Write-Output '[post-merge] local feature branch already deleted'
+  }
 }
 
 & git ls-remote --exit-code --heads origin $featureBranch > $null
