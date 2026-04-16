@@ -13,6 +13,7 @@
     "smoke": "powershell -ExecutionPolicy Bypass -File scripts/smoke-test.ps1",
     "dev:frontend": "npm --prefix frontend run dev",
     "dev:backend": "npm --prefix backend run dev",
+    "preview": "npm --prefix frontend run build && npm --prefix frontend run preview --",
     "start:staging": "npm --prefix backend start",
     "start": "npm --prefix backend start",
     "seed:backend": "npm --prefix backend run seed",
