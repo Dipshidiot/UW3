@@ -5,12 +5,36 @@
   "scripts": {
     "install:frontend": "npm --prefix frontend install",
     "install:backend": "npm --prefix backend install",
+    "install:all": "npm run install:frontend && npm run install:backend",
+    "lint": "npm run check:backend",
+    "typecheck": "tsc --project tsconfig.json --noEmit",
+    "test": "npm run test:all",
+    "e2e": "npm --prefix frontend run test:location",
+    "smoke": "powershell -ExecutionPolicy Bypass -File scripts/smoke-test.ps1",
     "dev:frontend": "npm --prefix frontend run dev",
     "dev:backend": "npm --prefix backend run dev",
+    "preview": "npm --prefix frontend run build && npm --prefix frontend run preview --",
+    "start:staging": "npm --prefix backend start",
     "start": "npm --prefix backend start",
     "seed:backend": "npm --prefix backend run seed",
     "build": "npm --prefix frontend run build",
     "check:backend": "npm --prefix backend run check",
-    "test:backend": "npm --prefix backend test"
+    "test:backend": "npm --prefix backend test",
+    "test:pricing": "npm run test:pricing:ci",
+    "test:pricing:ci": "tsx --test tests/pricing/*.test.ts",
+    "test:all": "npm run test:backend && npm run test:pricing"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "ioredis": "^5.7.0",
+    "pg": "^8.16.3",
+    "stripe": "^18.3.0"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/node": "^25.6.0",
+    "supertest": "^7.1.1",
+    "tsx": "^4.20.6",
+    "typescript": "^5.8.3"
   }
 }
