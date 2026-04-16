@@ -51,6 +51,8 @@ before(async () => {
   process.env.NODE_ENV = 'test';
   process.env.JWT_SECRET = 'test-secret';
   process.env.DEMO_MODE_ONLY = 'false';
+  process.env.DEMO_ALLOW_MEMBER_LOGIN = 'false';
+  process.env.DEMO_ALLOW_MEMBER_SIGNUP = 'false';
 
   mongoServer = await MongoMemoryServer.create();
   process.env.MONGO_URI = mongoServer.getUri();
@@ -464,6 +466,8 @@ test('admin can toggle demo preview mode from the admin controls', async () => {
 
 test('demo-only mode blocks live member access but still allows admin testing login', async () => {
   process.env.DEMO_MODE_ONLY = 'true';
+  process.env.DEMO_ALLOW_MEMBER_LOGIN = 'false';
+  process.env.DEMO_ALLOW_MEMBER_SIGNUP = 'false';
 
   try {
     const registerResponse = await request(app).post('/api/auth/register').send({
@@ -509,6 +513,119 @@ test('demo-only mode blocks live member access but still allows admin testing lo
     assert.equal(adminLoginResponse.body.user.role, 'admin');
   } finally {
     process.env.DEMO_MODE_ONLY = 'false';
+    process.env.DEMO_ALLOW_MEMBER_LOGIN = 'false';
+    process.env.DEMO_ALLOW_MEMBER_SIGNUP = 'false';
+  }
+});
+
+test('demo-only mode allows member login when login flag is enabled while signup stays blocked', async () => {
+  const prevDemoModeOnly = process.env.DEMO_MODE_ONLY;
+  const prevDemoMemberLogin = process.env.DEMO_ALLOW_MEMBER_LOGIN;
+  const prevDemoMemberSignup = process.env.DEMO_ALLOW_MEMBER_SIGNUP;
+
+  process.env.DEMO_MODE_ONLY = 'true';
+  process.env.DEMO_ALLOW_MEMBER_LOGIN = 'true';
+  process.env.DEMO_ALLOW_MEMBER_SIGNUP = 'false';
+
+  try {
+    await User.create({
+      name: 'Demo Login Member',
+      email: 'demo-login-member@example.com',
+      password: 'Secret123!',
+      role: 'user',
+      region: 'north',
+    });
+
+    const memberLoginResponse = await request(app).post('/api/auth/login').send({
+      email: 'demo-login-member@example.com',
+      password: 'Secret123!',
+    });
+
+    assert.equal(memberLoginResponse.statusCode, 200);
+    assert.equal(memberLoginResponse.body.user.role, 'user');
+    assert.ok(memberLoginResponse.body.token);
+
+    const profileResponse = await request(app)
+      .get('/api/profile')
+      .set('Authorization', `Bearer ${memberLoginResponse.body.token}`);
+
+    assert.equal(profileResponse.statusCode, 200);
+
+    const blockedRegisterResponse = await request(app).post('/api/auth/register').send({
+      name: 'Still Blocked Signup',
+      email: 'still-blocked-signup@example.com',
+      password: 'Secret123!',
+    });
+
+    assert.equal(blockedRegisterResponse.statusCode, 403);
+    assert.match(blockedRegisterResponse.body.message, /demo mode|preview mode|disabled until launch/i);
+  } finally {
+    if (prevDemoModeOnly === undefined) {
+      delete process.env.DEMO_MODE_ONLY;
+    } else {
+      process.env.DEMO_MODE_ONLY = prevDemoModeOnly;
+    }
+
+    if (prevDemoMemberLogin === undefined) {
+      delete process.env.DEMO_ALLOW_MEMBER_LOGIN;
+    } else {
+      process.env.DEMO_ALLOW_MEMBER_LOGIN = prevDemoMemberLogin;
+    }
+
+    if (prevDemoMemberSignup === undefined) {
+      delete process.env.DEMO_ALLOW_MEMBER_SIGNUP;
+    } else {
+      process.env.DEMO_ALLOW_MEMBER_SIGNUP = prevDemoMemberSignup;
+    }
+  }
+});
+
+test('demo-only mode allows member signup when signup flag is enabled even if login flag is disabled', async () => {
+  const prevDemoModeOnly = process.env.DEMO_MODE_ONLY;
+  const prevDemoMemberLogin = process.env.DEMO_ALLOW_MEMBER_LOGIN;
+  const prevDemoMemberSignup = process.env.DEMO_ALLOW_MEMBER_SIGNUP;
+
+  process.env.DEMO_MODE_ONLY = 'true';
+  process.env.DEMO_ALLOW_MEMBER_LOGIN = 'false';
+  process.env.DEMO_ALLOW_MEMBER_SIGNUP = 'true';
+
+  try {
+    const registerResponse = await request(app).post('/api/auth/register').send({
+      name: 'Signup Enabled Member',
+      email: 'signup-enabled-member@example.com',
+      password: 'Secret123!',
+      region: 'north',
+    });
+
+    assert.equal(registerResponse.statusCode, 201);
+    assert.equal(registerResponse.body.user.role, 'user');
+    assert.ok(registerResponse.body.token);
+
+    const memberLoginResponse = await request(app).post('/api/auth/login').send({
+      email: 'signup-enabled-member@example.com',
+      password: 'Secret123!',
+    });
+
+    assert.equal(memberLoginResponse.statusCode, 403);
+    assert.match(memberLoginResponse.body.message, /demo mode|preview mode|disabled until launch/i);
+  } finally {
+    if (prevDemoModeOnly === undefined) {
+      delete process.env.DEMO_MODE_ONLY;
+    } else {
+      process.env.DEMO_MODE_ONLY = prevDemoModeOnly;
+    }
+
+    if (prevDemoMemberLogin === undefined) {
+      delete process.env.DEMO_ALLOW_MEMBER_LOGIN;
+    } else {
+      process.env.DEMO_ALLOW_MEMBER_LOGIN = prevDemoMemberLogin;
+    }
+
+    if (prevDemoMemberSignup === undefined) {
+      delete process.env.DEMO_ALLOW_MEMBER_SIGNUP;
+    } else {
+      process.env.DEMO_ALLOW_MEMBER_SIGNUP = prevDemoMemberSignup;
+    }
   }
 });
 

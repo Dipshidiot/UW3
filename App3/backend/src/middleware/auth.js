@@ -1,6 +1,6 @@
 import jwt from 'jsonwebtoken';
 
-import { isDemoModeOnly } from '../config/appMode.js';
+import { isDemoMemberLoginEnabled, isDemoModeOnly } from '../config/appMode.js';
 import User from '../models/User.js';
 
 export const protect = async (req, res, next) => {
@@ -28,7 +28,7 @@ export const protect = async (req, res, next) => {
       adminAccessRevokedAt: user.adminAccessRevokedAt,
     };
 
-    if (isDemoModeOnly() && req.user.role === 'user') {
+    if (isDemoModeOnly() && req.user.role === 'user' && !isDemoMemberLoginEnabled()) {
       return res.status(403).json({
         message: 'Demo preview mode is active. Live member access is disabled until launch.',
       });

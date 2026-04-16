@@ -1,4 +1,4 @@
-import { isDemoModeOnly } from '../config/appMode.js';
+import { isDemoMemberLoginEnabled, isDemoMemberSignupEnabled, isDemoModeOnly } from '../config/appMode.js';
 import User from '../models/User.js';
 import { signToken } from '../utils/tokens.js';
 import { isValidEmail, SUPPORTED_UTILITY_KEYS } from '../utils/validators.js';
@@ -40,7 +40,7 @@ export const register = async (req, res, next) => {
       });
     }
 
-    if (isDemoModeOnly()) {
+    if (isDemoModeOnly() && !isDemoMemberSignupEnabled()) {
       return res.status(403).json({
         message: 'Demo preview mode is active. Live account creation is disabled until launch.',
       });
@@ -76,7 +76,7 @@ export const login = async (req, res, next) => {
       return res.status(401).json({ message: 'Invalid credentials.' });
     }
 
-    if (isDemoModeOnly() && user.role === 'user') {
+    if (isDemoModeOnly() && user.role === 'user' && !isDemoMemberLoginEnabled()) {
       return res.status(403).json({
         message: 'Demo preview mode is active. Live member sign-in is disabled until launch.',
       });
